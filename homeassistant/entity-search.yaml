@@ -1,0 +1,29 @@
+# Merge under `script:` in configuration.yaml, or paste the body into scripts.yaml.
+# Verify the ESPHome callback action name in Developer Tools → Actions.
+panda_entity_search:
+  alias: Panda Touch entity search
+  mode: parallel
+  max: 5
+  fields:
+    query:
+      description: Entity ID or friendly-name substring
+    kind:
+      description: control, sensor or weather
+    request_id:
+      description: Request token returned unchanged
+  sequence:
+    - variables:
+        results: >-
+          {% set q = query | default('') | lower %}
+          {% set domains = ['sensor'] if kind == 'sensor' else ['weather'] if kind == 'weather' else ['script','light','switch','input_boolean','binary_sensor'] %}
+          {% set ns = namespace(rows=[]) %}
+          {% for s in states | sort(attribute='entity_id') %}
+            {% if s.domain in domains and (q in s.entity_id | lower or q in s.name | lower) and ns.rows | length < 3 %}
+              {% set ns.rows = ns.rows + [s.entity_id ~ ' | ' ~ (s.name | replace('\n', ' '))] %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.rows | join('\n') }}
+    - action: esphome.panda_workshop_entity_search_results
+      data:
+        request_id: "{{ request_id | string }}"
+        results: "{{ results }}"
