@@ -1,0 +1,217 @@
+substitutions:
+  font_file: "gfonts://Roboto"
+  timezone: "Europe/Berlin"
+
+esphome:
+  name: panda-workshop
+  friendly_name: Workshop Panda Touch
+  min_version: 2026.10.2
+
+esp32:
+  board: esp32-s3-devkitc-1
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    advanced:
+      compiler_optimization: PERF
+    sdkconfig_options:
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B: y
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+  level: DEBUG
+  hardware_uart: UART0
+  baud_rate: 115200
+  logs:
+    api: INFO
+    wifi: DEBUG
+    workshop_panel: DEBUG
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+  homeassistant_states: true
+  homeassistant_services: true
+  custom_services: true
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  power_save_mode: none
+  ap:
+    ssid: Workshop Setup
+    password: !secret setup_ap_password
+    ap_timeout: 30s
+  reboot_timeout: 0s
+
+captive_portal:
+
+time:
+  - platform: homeassistant
+    id: ha_clock
+    timezone: "${timezone}"
+
+i2c:
+  - id: touch_bus
+    sda: GPIO2
+    scl: GPIO1
+    scan: false
+
+display:
+  - platform: mipi_rgb
+    id: panda_display
+    model: RPI
+    dimensions:
+      width: 800
+      height: 480
+    data_pins:
+      red: [GPIO6, GPIO7, GPIO8, GPIO9, GPIO10]
+      green: [GPIO11, GPIO12, GPIO13, GPIO14, GPIO15, GPIO16]
+      blue: [GPIO17, GPIO18, GPIO48, GPIO47, GPIO39]
+    de_pin: GPIO38
+    pclk_pin: GPIO5
+    reset_pin: GPIO46
+    pclk_frequency: 14800000Hz
+    hsync_back_porch: 16
+    hsync_front_porch: 16
+    vsync_back_porch: 32
+    vsync_front_porch: 32
+    use_axis_flips: false
+    update_interval: never
+    auto_clear_enabled: false
+
+touchscreen:
+  - platform: gt911
+    id: panda_touch
+    i2c_id: touch_bus
+    reset_pin: GPIO41
+    interrupt_pin: GPIO40
+
+output:
+  - platform: ledc
+    id: backlight_pwm
+    pin: GPIO21
+    frequency: 30000Hz
+    max_power: 0.30
+
+light:
+  - platform: monochromatic
+    id: screen_backlight
+    name: Screen brightness
+    output: backlight_pwm
+    restore_mode: ALWAYS_ON
+    default_transition_length: 0s
+
+http_request:
+  timeout: 5s
+  verify_ssl: true
+
+image:
+  - platform: file
+    file: assets/background.png
+    id: dashboard_background
+    type: RGB565
+  - platform: online_image
+    id: snapshot
+    url: http://homeassistant.local:8123/invalid-until-camera-open
+    format: JPEG
+    type: RGB565
+    resize: 640x320
+    update_interval: never
+
+  - platform: online_image
+    id: custom_wallpaper
+    url: http://homeassistant.local:8123/invalid-until-background-set
+    format: JPEG
+    type: RGB565
+    resize: 800x480
+    update_interval: never
+
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [workshop_panel]
+
+font:
+  - file: "${font_file}"
+    id: german_16
+    size: 16
+    glyphsets: []
+    glyphs: ["äöüÄÖÜß"]
+  - file: "${font_file}"
+    id: german_20
+    size: 20
+    glyphsets: []
+    glyphs: ["äöüÄÖÜß"]
+  - file: "${font_file}"
+    id: german_28
+    size: 28
+    glyphsets: []
+    glyphs: ["äöüÄÖÜß"]
+  - file: "${font_file}"
+    id: german_48
+    size: 48
+    glyphsets: []
+    glyphs: ["äöüÄÖÜß"]
+
+lvgl:
+  update_interval: 16ms
+  displays: [panda_display]
+  touchscreens:
+    - touchscreen_id: panda_touch
+      long_press_time: 2s
+  default_font: montserrat_20
+  theme:
+    dark_mode: true
+  # A small ~64 KB draw buffer fits in fast internal RAM while retaining
+  # memory for Wi-Fi/API. Larger 25% internal buffers exhausted that memory;
+  # the previous 50% PSRAM buffer made every page redraw much slower.
+  buffer_size: 8%
+  pages:
+    - id: bootstrap_page
+      widgets:
+        - label:
+            text: Starting Workshop...
+            text_font: montserrat_16
+        - label:
+            text: ""
+            text_font: montserrat_28
+        - label:
+            text: ""
+            text_font: montserrat_48
+        # Keep these LVGL widget implementations enabled for the C++ UI.
+        - button:
+            hidden: true
+        - slider:
+            hidden: true
+        - bar:
+            hidden: true
+        - dropdown:
+            hidden: true
+            options: [Bootstrap]
+        - textarea:
+            hidden: true
+        - keyboard:
+            hidden: true
+        - image:
+            hidden: true
+            src: snapshot
+
+workshop_panel:
+  id: workshop
+  clock_id: ha_clock
+  backlight_id: screen_backlight
+  snapshot_id: snapshot
+  background_id: dashboard_background
+  wallpaper_id: custom_wallpaper
+  german_font_16: german_16
+  german_font_20: german_20
+  german_font_28: german_28
+  german_font_48: german_48
